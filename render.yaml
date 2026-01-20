@@ -3,7 +3,7 @@ services:
     name: simple-mcp-server
     env: python
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn http_server:app
+    startCommand: gunicorn mcp_sse_server:app
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.0
