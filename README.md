@@ -50,10 +50,11 @@ npx @modelcontextprotocol/inspector python server.py
 
 ## Deploying to Render.com
 
-This project includes two versions of the server:
+This project includes three versions of the server:
 
 1. **`server.py`** - Standard MCP server using stdio (for local use with MCP clients)
-2. **`http_server.py`** - HTTP wrapper version (for web deployment to Render.com)
+2. **`http_server.py`** - HTTP REST API wrapper (simple REST endpoints)
+3. **`mcp_sse_server.py`** - MCP server with SSE transport (proper MCP protocol over HTTP) ⭐ **Deployed Version**
 
 ### Quick Deploy to Render.com
 
@@ -76,58 +77,70 @@ This project includes two versions of the server:
 3. **Access Your Server**:
    - Once deployed, Render will provide a URL (e.g., `https://simple-mcp-server.onrender.com`)
    - Visit the URL to see server information
-   - Use the API endpoints to interact with the tools
+   - Use the MCP SSE endpoint to interact with the tools
 
-### API Endpoints
+### MCP SSE Endpoints
 
-Once deployed, you can access these endpoints:
+The deployed server uses **Server-Sent Events (SSE)** to implement the MCP protocol over HTTP:
 
 - `GET /` - Server information and available endpoints
 - `GET /health` - Health check
-- `GET /tools` - List all available tools
-- `POST /tools/echo` - Echo tool
-  ```json
-  {"text": "Hello, World!"}
-  ```
-- `GET /tools/time` - Get current server time
-- `POST /tools/calculate` - Calculator
-  ```json
-  {"operation": "add", "a": 5, "b": 3}
-  ```
-- `POST /tools/reverse` - Reverse text
-  ```json
-  {"text": "Hello"}
-  ```
+- `GET /sse` - SSE endpoint (server info stream)
+- `POST /sse` - MCP protocol endpoint (JSON-RPC 2.0)
 
 ### Testing the Deployed Server
 
-Using curl:
+**Basic Health Check:**
 ```bash
 # Get server info
 curl https://your-app.onrender.com/
 
-# Echo test
-curl -X POST https://your-app.onrender.com/tools/echo \
-  -H "Content-Type: application/json" \
-  -d '{"text": "Hello, MCP!"}'
-
-# Calculate
-curl -X POST https://your-app.onrender.com/tools/calculate \
-  -H "Content-Type: application/json" \
-  -d '{"operation": "multiply", "a": 7, "b": 6}'
-
-# Get current time
-curl https://your-app.onrender.com/tools/time
-
-# Reverse text
-curl -X POST https://your-app.onrender.com/tools/reverse \
-  -H "Content-Type: application/json" \
-  -d '{"text": "MCP Server"}'
+# Health check
+curl https://your-app.onrender.com/health
 ```
 
-## Advanced: HTTP Wrapper (Optional)
+**MCP Protocol Testing:**
+```bash
+# List available tools
+curl -X POST https://your-app.onrender.com/sse \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
 
-The HTTP wrapper (`http_server.py`) is already included and configured for Render.com deployment. It provides a REST API interface to the MCP server functionality, making it accessible via standard HTTP requests.
+# Call echo tool
+curl -X POST https://your-app.onrender.com/sse \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"echo","arguments":{"text":"Hello MCP!"}}}'
+
+# Call calculate tool
+curl -X POST https://your-app.onrender.com/sse \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"calculate","arguments":{"operation":"multiply","a":7,"b":6}}}'
+```
+
+**For detailed testing instructions, see [SSE_TESTING.md](SSE_TESTING.md)**
+
+## Using with MCP Clients
+
+### Claude Desktop Configuration
+
+Add to your Claude Desktop config:
+```json
+{
+  "mcpServers": {
+    "simple-mcp-server": {
+      "url": "https://your-app.onrender.com/sse",
+      "transport": "sse"
+    }
+  }
+}
+```
+
+## Alternative: HTTP REST API
+
+If you prefer a simple REST API instead of MCP protocol, you can deploy `http_server.py` instead:
+1. Change `render.yaml` startCommand to: `gunicorn http_server:app`
+2. Redeploy
+3. Use standard REST endpoints (see `http_server.py` for details)
 
 ## Configuration
 

@@ -63,8 +63,10 @@ Replace `YOUR_USERNAME` with your actual GitHub username.
      - **Name**: simple-mcp-server
      - **Environment**: Python
      - **Build Command**: `pip install -r requirements.txt`
-     - **Start Command**: `gunicorn http_server:app`
+     - **Start Command**: `gunicorn --bind 0.0.0.0:$PORT --workers 2 --timeout 120 mcp_sse_server:app`
    - Click "Apply" to deploy
+   
+   **Note**: This deploys the MCP SSE server (proper MCP protocol). To deploy the simple REST API instead, change the start command to `gunicorn http_server:app`
 
 5. **Wait for Deployment**
    - Render will start building your application
@@ -85,7 +87,7 @@ Simply visit your Render URL to see the server information:
 https://your-app-name.onrender.com/
 ```
 
-### Using curl
+### Using curl (MCP SSE Protocol)
 
 ```bash
 # Get server info
@@ -94,45 +96,83 @@ curl https://your-app-name.onrender.com/
 # Health check
 curl https://your-app-name.onrender.com/health
 
-# Echo test
-curl -X POST https://your-app-name.onrender.com/tools/echo \
+# List available tools
+curl -X POST https://your-app-name.onrender.com/sse \
   -H "Content-Type: application/json" \
-  -d '{"text": "Hello from Render!"}'
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
+
+# Echo test
+curl -X POST https://your-app-name.onrender.com/sse \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"echo","arguments":{"text":"Hello from Render!"}}}'
 
 # Calculate
-curl -X POST https://your-app-name.onrender.com/tools/calculate \
+curl -X POST https://your-app-name.onrender.com/sse \
   -H "Content-Type: application/json" \
-  -d '{"operation": "add", "a": 10, "b": 5}'
+  -d '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"calculate","arguments":{"operation":"add","a":10,"b":5}}}'
 
 # Get current time
-curl https://your-app-name.onrender.com/tools/time
+curl -X POST https://your-app-name.onrender.com/sse \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"get_current_time","arguments":{}}}'
 
 # Reverse text
-curl -X POST https://your-app-name.onrender.com/tools/reverse \
+curl -X POST https://your-app-name.onrender.com/sse \
   -H "Content-Type: application/json" \
-  -d '{"text": "Render.com"}'
+  -d '{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"reverse_text","arguments":{"text":"Render.com"}}}'
 ```
 
-### Using Python
+**For detailed testing instructions, see [SSE_TESTING.md](SSE_TESTING.md)**
+
+### Using Python (MCP Client)
 
 ```python
 import requests
+import json
 
-BASE_URL = "https://your-app-name.onrender.com"
+BASE_URL = "https://your-app-name.onrender.com/sse"
+
+def call_mcp_tool(tool_name, arguments):
+    payload = {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "tools/call",
+        "params": {
+            "name": tool_name,
+            "arguments": arguments
+        }
+    }
+    
+    response = requests.post(BASE_URL, json=payload)
+    
+    # Parse SSE response
+    for line in response.text.split('\n'):
+        if line.startswith('data: '):
+            data = json.loads(line[6:])
+            return data
 
 # Echo
-response = requests.post(
-    f"{BASE_URL}/tools/echo",
-    json={"text": "Hello, World!"}
-)
-print(response.json())
+result = call_mcp_tool("echo", {"text": "Hello, World!"})
+print(result)
 
 # Calculate
-response = requests.post(
-    f"{BASE_URL}/tools/calculate",
-    json={"operation": "multiply", "a": 7, "b": 6}
-)
-print(response.json())
+result = call_mcp_tool("calculate", {"operation": "multiply", "a": 7, "b": 6})
+print(result)
+```
+
+### Using with Claude Desktop
+
+Add to your Claude Desktop config (`~/Library/Application Support/Claude/claude_desktop_config.json` on Mac):
+
+```json
+{
+  "mcpServers": {
+    "simple-mcp-server": {
+      "url": "https://your-app-name.onrender.com/sse",
+      "transport": "sse"
+    }
+  }
+}
 ```
 
 ## Updating Your Deployment
